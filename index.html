@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upload and Capture</title>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+</head>
+<body>
+    <h1>Image Upload and Capture</h1>
+
+    <form id="imageForm" enctype="multipart/form-data">
+        <label for="fileInput">Select Image:</label>
+        <input type="file" id="fileInput" name="fileInput" accept="image/*">
+
+        <div id="cameraContainer">
+            <video id="video" width="640" height="480" style="display:none;" autoplay></video>
+            <button type="button" id="capture">Capture from Camera</button>
+        </div>
+
+        <img id="capturedImage" style="display:none;" alt="Captured Image">
+
+        <button type="button" id="uploadButton">Upload Image</button>
+    </form>
+
+    <script>
+        $(document).ready(function () {
+            var video = document.getElementById('video');
+            var canvas = document.createElement('canvas');
+            var context = canvas.getContext('2d');
+            var selectedImage = null;
+
+            function startCamera() {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(function (stream) {
+                        video.srcObject = stream;
+                        video.play();
+
+                        video.addEventListener('loadeddata', function () {
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                        });
+                    })
+                    .catch(function (err) {
+                        console.error('Error accessing webcam: ', err);
+                    });
+            }
+
+            startCamera();
+
+            $('#capture').click(function () {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                video.style.display = 'none';
+
+                var capturedImage = document.getElementById('capturedImage');
+                var currentDateTime = new Date().toISOString().replace(/[:.]/g, '-');
+                var fileName = 'captured-image-' + currentDateTime + '.png';
+                capturedImage.src = canvas.toDataURL('image/png');
+                capturedImage.style.display = 'block';
+
+                video.srcObject.getTracks().forEach(track => track.stop());
+
+                selectedImage = {
+                    file: dataURItoBlob(capturedImage.src),
+                    fileName: fileName
+                };
+
+                startCamera(); // Reiniciar la cámara después de la captura
+            });
+
+            $('#fileInput').change(function () {
+                var fileInput = document.getElementById('fileInput');
+                var capturedImage = document.getElementById('capturedImage');
+
+                if (fileInput.files && fileInput.files[0]) {
+                    var reader = new FileReader();
+                    reader.onload = function (e) {
+                        var currentDateTime = new Date().toISOString().replace(/[:.]/g, '-');
+                        var fileName = 'selected-image-' + currentDateTime + '.png';
+                        capturedImage.src = e.target.result;
+                        capturedImage.style.display = 'block';
+                        video.style.display = 'none';
+                        selectedImage = {
+                            file: fileInput.files[0],
+                            fileName: fileName
+                        };
+                    };
+                    reader.readAsDataURL(fileInput.files[0]);
+                }
+            });
+
+            $('#uploadButton').click(function () {
+                if (selectedImage) {
+                    var formData = new FormData();
+                    formData.append('fileInput', selectedImage.file, selectedImage.fileName);
+
+                    $.ajax({
+                        type: 'POST',
+                        url: 'upload.php',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        success: function (response) {
+                            alert(response);
+                        }
+                    });
+                } else {
+                    alert('No image selected or captured.');
+                }
+            });
+
+            function dataURItoBlob(dataURI) {
+                var byteString = atob(dataURI.split(',')[1]);
+                var ab = new ArrayBuffer(byteString.length);
+                var ia = new Uint8Array(ab);
+                for (var i = 0; i < byteString.length; i++) {
+                    ia[i] = byteString.charCodeAt(i);
+                }
+                return new Blob([ab], { type: 'image/png' });
+            }
+        });
+    </script>
+</body>
+</html>
